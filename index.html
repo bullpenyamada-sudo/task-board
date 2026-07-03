@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3577d4">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>タスク管理ボード</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#ffffff; --border:#e2e6ea; --text:#2b3440; --sub:#8a94a0;
+    --accent:#3577d4; --danger:#d64545; --today:#ffe9e9;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI","Yu Gothic",sans-serif;
+    font-size:14px;
+  }
+  button{font-family:inherit; cursor:pointer; border:1px solid var(--border); background:#fff;
+    border-radius:6px; padding:4px 10px; font-size:13px; color:var(--text);}
+  button:hover{background:#f0f4f8;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  button.primary:hover{background:#2b66bb;}
+  button.danger{color:var(--danger); border-color:#f0c4c4;}
+  button.danger:hover{background:#fdf0f0;}
+  input,select{font-family:inherit; font-size:13px; border:1px solid var(--border); border-radius:6px; padding:4px 6px;}
+  input:focus{outline:2px solid #bcd4f5;}
+
+  /* ===== ヘッダー ===== */
+  #topbar{
+    height:50px; display:flex; align-items:center; gap:8px; padding:0 12px;
+    background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  .brand{font-weight:700; font-size:16px; white-space:nowrap;}
+  #todayLabel{color:var(--sub); font-size:13px; white-space:nowrap;}
+  .spacer{flex:1;}
+  .seg{display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .seg button{border:none; border-radius:0; padding:4px 10px;}
+  .seg button.on{background:var(--accent); color:#fff;}
+  .nav{display:flex; gap:4px;}
+  details.menu{position:relative;}
+  details.menu summary{list-style:none; cursor:pointer; border:1px solid var(--border);
+    border-radius:6px; padding:4px 9px; font-size:14px; background:#fff;}
+  details.menu summary::-webkit-details-marker{display:none;}
+  details.menu[open] summary{background:#f0f4f8;}
+  .menu-body{
+    position:absolute; right:0; top:34px; z-index:50; background:#fff; border:1px solid var(--border);
+    border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.12); padding:6px; display:flex;
+    flex-direction:column; gap:4px; min-width:220px;
+  }
+  .menu-body button{text-align:left; border:none;}
+
+  /* ===== メイン2カラム ===== */
+  main{
+    height:calc(100vh - 50px); display:grid; grid-template-columns:minmax(0,1fr) 350px;
+    gap:10px; padding:10px; overflow:hidden;
+  }
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .panel-title{
+    display:flex; align-items:center; gap:8px; padding:8px 12px 6px; font-weight:700; font-size:14px;
+    white-space:nowrap;
+  }
+  .panel-title .hint{font-weight:400; font-size:11px; color:var(--sub); margin-left:auto;
+    overflow:hidden; text-overflow:ellipsis; min-width:0;}
+  .count{font-weight:400; font-size:12px; color:var(--sub);}
+
+  /* ===== ガント ===== */
+  #ganttPanel{min-width:0;}
+  #gantt{flex:1; display:flex; flex-direction:column; min-height:0; padding:0 12px 10px; user-select:none;}
+  #ganttHead{display:flex; flex:none;}
+  #nameHead{width:150px; flex:none; font-size:11px; color:var(--sub); display:flex; align-items:flex-end; padding-bottom:3px;}
+  #axis{flex:1; position:relative; height:40px; min-width:0; overflow:hidden;}
+  .ax-month{position:absolute; top:0; height:20px; font-size:11px; font-weight:700; color:var(--sub);
+    border-left:1px solid #c9d2da; padding-left:4px; line-height:20px; white-space:nowrap; overflow:hidden;}
+  .ax-day{position:absolute; top:20px; height:20px; font-size:10px; color:var(--sub); text-align:center; line-height:20px; overflow:hidden;}
+  .ax-day.sat{color:#3577d4;} .ax-day.sun{color:#d64545;}
+  .ax-day.today{background:var(--today); color:#d64545; font-weight:700; border-radius:4px 4px 0 0;}
+  #ganttBody{flex:1; display:flex; min-height:0; overflow-y:auto;}
+  #nameCol{width:150px; flex:none;}
+  .g-name{display:flex; align-items:center; font-size:12px; padding-right:8px; cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-top:1px solid #f0f3f6;}
+  .g-name:hover{color:var(--accent);}
+  .g-name .pct{margin-left:auto; font-size:10px; color:var(--sub); padding-left:4px;}
+  .g-name.done100{color:var(--sub); text-decoration:line-through;}
+  #chart{flex:1; position:relative; min-width:0; overflow:hidden;}
+  .bg-weekend{position:absolute; top:0; bottom:0; background:#f3f6f9;}
+  .bg-today{position:absolute; top:0; bottom:0; background:var(--today);}
+  .bg-grid{position:absolute; top:0; bottom:0; width:1px; background:#eef1f4;}
+  .bg-month{position:absolute; top:0; bottom:0; width:1px; background:#c9d2da;}
+  .bg-row{position:absolute; left:0; right:0; border-top:1px solid #f0f3f6;}
+  .today-line{position:absolute; top:0; bottom:0; width:2px; background:#e05555; z-index:3;}
+  .bar{
+    position:absolute; border-radius:5px; z-index:4; overflow:hidden; cursor:grab;
+    display:flex; align-items:center; box-shadow:0 1px 2px rgba(0,0,0,.15);
+  }
+  .bar .fill{position:absolute; left:0; top:0; bottom:0; background:rgba(255,255,255,.45);}
+  .bar .lbl{
+    position:relative; z-index:2; color:#fff; font-size:11px; padding:0 6px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.35); width:100%;
+  }
+  .bar.clip-l{border-top-left-radius:0; border-bottom-left-radius:0; border-left:2px dashed rgba(255,255,255,.9);}
+  .bar.clip-r{border-top-right-radius:0; border-bottom-right-radius:0; border-right:2px dashed rgba(255,255,255,.9);}
+  #ganttEmpty{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--sub); font-size:13px; z-index:5; text-align:center; line-height:1.8;
+  }
+
+  /* ===== 右パネル ===== */
+  #side{display:flex; flex-direction:column; gap:10px; min-height:0; min-width:0;}
+  #todoPanel{flex:1; min-height:0;}
+  #quickAdd{display:flex; gap:4px; padding:0 12px 8px; flex:none;}
+  #qaText{flex:1; min-width:0;}
+  #qaDate{width:110px; flex:none; padding:4px 2px;}
+  #qaTime{width:64px; flex:none; padding:4px 2px;}
+  #todoList{flex:1; overflow-y:auto; min-height:0; padding:0 8px 4px;}
+  .todo-sec{
+    font-size:11px; font-weight:700; color:var(--sub); padding:6px 6px 2px;
+    display:flex; align-items:center; gap:4px;
+  }
+  .todo-sec.overdue{color:var(--danger);}
+  .todo-item{
+    display:flex; align-items:center; gap:7px; padding:4px 6px; border-radius:6px; font-size:13px;
+  }
+  .todo-item:hover{background:#f4f7fa;}
+  .todo-item input[type=checkbox]{width:16px; height:16px; flex:none; cursor:pointer; accent-color:var(--accent);}
+  .todo-item .txt{flex:1; min-width:0; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .todo-item .when{flex:none; font-size:11px; color:var(--sub); background:#eef2f6; border-radius:4px; padding:1px 6px; white-space:nowrap;}
+  .todo-item.overdue .when{color:#fff; background:var(--danger);}
+  .todo-item.done .txt{color:var(--sub); text-decoration:line-through;}
+  .srcic{flex:none; font-size:10px; opacity:.75;}
+  #todoEmpty{color:var(--sub); font-size:12px; text-align:center; padding:24px 8px; line-height:1.8;}
+  #doneBar{flex:none; display:flex; gap:6px; padding:6px 12px 10px; align-items:center;}
+  #doneBar button{font-size:11px; padding:2px 8px;}
+  #statsBar{
+    flex:none; background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:8px 14px; font-size:12px; color:var(--sub); display:flex; gap:14px; align-items:center;
+  }
+  #statsBar b{color:var(--text); font-size:14px;}
+
+  /* ===== ダイアログ ===== */
+  dialog{
+    border:none; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.25);
+    padding:18px 20px; width:340px; max-width:92vw;
+  }
+  dialog::backdrop{background:rgba(30,40,50,.35);}
+  dialog h3{font-size:15px; margin-bottom:12px;}
+  dialog label{display:block; font-size:12px; color:var(--sub); margin-bottom:10px;}
+  dialog label input{display:block; width:100%; margin-top:3px; font-size:14px; padding:6px 8px;}
+  .row2{display:flex; gap:8px;} .row2 label{flex:1;}
+  #tColors{display:flex; gap:8px; margin:-4px 0 12px;}
+  .swatch{width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer;}
+  .swatch.on{border-color:var(--text); box-shadow:0 0 0 2px #fff inset;}
+  input[type=range]{width:100%; margin-top:6px; padding:0;}
+  .dlg-actions{display:flex; gap:8px; margin-top:14px; align-items:center;}
+  .dlg-actions .spacer{flex:1;}
+
+  /* ===== スマホ(縦画面)対応 ===== */
+  @media (max-width:700px){
+    body{display:flex; flex-direction:column; height:100dvh;}
+    #topbar{height:auto; flex:none; flex-wrap:wrap; padding:6px 8px; row-gap:6px;}
+    #todayLabel{display:none;}
+    .brand{font-size:14px;}
+    .seg button{padding:3px 7px; font-size:12px;}
+    #addTaskBtn{padding:4px 8px;}
+    main{flex:1; height:auto; min-height:0; grid-template-columns:minmax(0,1fr); grid-template-rows:40% 1fr; padding:6px; gap:6px;}
+    .panel-title .hint{display:none;}
+    #nameCol, #nameHead{width:104px;}
+    #qaDate{width:100px;}
+  }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">📋 タスク管理ボード</div>
+  <div id="todayLabel"></div>
+  <div class="spacer"></div>
+  <div class="seg" id="rangeSeg">
+    <button data-days="14">2週間</button>
+    <button data-days="31" class="on">1ヶ月</button>
+    <button data-days="92">3ヶ月</button>
+    <button data-days="183">半年</button>
+  </div>
+  <div class="nav">
+    <button id="navPrev" title="前へ">◀</button>
+    <button id="navToday">今日</button>
+    <button id="navNext" title="次へ">▶</button>
+  </div>
+  <button id="addTaskBtn" class="primary">＋ 長期タスク</button>
+  <details class="menu" id="gearMenu">
+    <summary>⚙️</summary>
+    <div class="menu-body">
+      <button id="syncBtn">🔄 予定データを再読み込み</button>
+      <button id="exportBtn">💾 データを書き出す（バックアップ）</button>
+      <button id="importBtn">📂 バックアップを読み込む</button>
+      <button id="sampleBtn">✨ サンプルデータを入れる</button>
+      <button id="clearBtn" class="danger">🗑 全データを消去</button>
+    </div>
+  </details>
+  <input type="file" id="importFile" accept=".json" hidden>
+</header>
+
+<main>
+  <!-- 左：ガントチャート -->
+  <section class="panel" id="ganttPanel">
+    <div class="panel-title">📊 長期タスク <span class="count" id="taskCount"></span>
+      <span class="hint">バー：ドラッグで移動 / 端をつまんで期間変更 / クリックで編集</span>
+    </div>
+    <div id="gantt">
+      <div id="ganttHead">
+        <div id="nameHead">タスク名</div>
+        <div id="axis"></div>
+      </div>
+      <div id="ganttBody">
+        <div id="nameCol"></div>
+        <div id="chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右：今日のやること・予定 -->
+  <aside id="side">
+    <section class="panel" id="todoPanel">
+      <div class="panel-title">✅ やること・予定</div>
+      <form id="quickAdd">
+        <input id="qaText" placeholder="やること・予定を入力" autocomplete="off" required>
+        <input id="qaDate" type="date" title="日付（任意）">
+        <input id="qaTime" type="time" title="時刻（任意）">
+        <button class="primary" title="追加">＋</button>
+      </form>
+      <div id="todoList"></div>
+      <div id="doneBar">
+        <button id="toggleDone"></button>
+        <button id="clearDone">完了を消去</button>
+      </div>
+    </section>
+    <div id="statsBar"></div>
+  </aside>
+</main>
+
+<!-- 長期タスク編集ダイアログ -->
+<dialog id="taskDlg">
+  <form id="taskForm">
+    <h3 id="taskDlgTitle">長期タスク</h3>
+    <label>タスク名<input id="tName" required autocomplete="off"></label>
+    <div class="row2">
+      <label>開始日<input id="tStart" type="date" required></label>
+      <label>終了日<input id="tEnd" type="date" required></label>
+    </div>
+    <label style="margin-bottom:4px;">色</label>
+    <div id="tColors"></div>
+    <label>進捗 <span id="tProgVal">0%</span>
+      <input id="tProg" type="range" min="0" max="100" step="5" value="0">
+    </label>
+    <div class="dlg-actions">
+      <button type="button" id="tDelete" class="danger">削除</button>
+      <span class="spacer"></span>
+      <button type="button" id="tCancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 合言葉ダイアログ（公開ページで予定データを復号するため） -->
+<dialog id="passDlg">
+  <form id="passForm">
+    <h3>🔑 合言葉</h3>
+    <p style="font-size:12px; color:var(--sub); margin-bottom:10px; line-height:1.6;">
+      予定データを読み込むための合言葉を入力してください。<br>この端末に記憶されるので、入力は初回だけです。</p>
+    <label>合言葉<input id="passInput" type="password" required autocomplete="off"></label>
+    <p id="passErr" style="color:var(--danger); font-size:12px; display:none; margin-bottom:8px;">合言葉が違うようです。もう一度お試しください。</p>
+    <div class="dlg-actions">
+      <span class="spacer"></span>
+      <button type="button" id="passCancel">あとで</button>
+      <button type="submit" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- やること・予定 編集ダイアログ -->
+<dialog id="todoDlg">
+  <form id="todoForm">
+    <h3>やること・予定の編集</h3>
+    <label>内容<input id="dText" required autocomplete="off"></label>
+    <div class="row2">
+      <label>日付（任意）<input id="dDate" type="date"></label>
+      <label>時刻（任意）<input id="dTime" type="time"></label>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" id="dDelete" class="danger">削除</button>
+      <span class="spacer"></span>
+      <button type="button" id="dCancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="task-feed.js"></script><!-- Claudeが自動集約する予定データ（無くても動く） -->
+<script>
+'use strict';
+/* ========== ユーティリティ ========== */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const fromISO = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const dayDiff = (a,b) => Math.round((fromISO(b) - fromISO(a)) / 86400000); // b - a（日数）
+const WKD = ['日','月','火','水','木','金','土'];
+const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const todayISO = () => iso(new Date());
+const PALETTE = ['#4e79a7','#f28e2b','#59a14e','#e15759','#b07aa1','#76b7b2'];
+
+/* ========== 状態 ========== */
+let tasks = [];   // {id, name, start, end, color, progress}
+let todos = [];   // {id, text, date, time, done}
+let view = { days: 31, start: '' };
+let showDone = false;
+let selColor = PALETTE[0];
+let editingTask = null, editingTodo = null;
+
+function load(){
+  try { tasks = JSON.parse(localStorage.getItem('tm_tasks') || '[]'); } catch(e){ tasks = []; }
+  try { todos = JSON.parse(localStorage.getItem('tm_todos') || '[]'); } catch(e){ todos = []; }
+  const savedDays = Number(localStorage.getItem('tm_days'));
+  if ([14,31,92,183].includes(savedDays)) view.days = savedDays;
+  resetViewStart();
+}
+function saveTasks(){ localStorage.setItem('tm_tasks', JSON.stringify(tasks)); }
+function saveTodos(){ localStorage.setItem('tm_todos', JSON.stringify(todos)); }
+function resetViewStart(){ view.start = iso(addDays(new Date(), -Math.round(view.days * 0.22))); }
+
+/* ========== ガントチャート ========== */
+function renderGantt(){
+  const axis = $('#axis'), chart = $('#chart'), nameCol = $('#nameCol');
+  const days = view.days;
+  const W = chart.clientWidth || 600;
+  const colW = W / days;
+  const start = view.start;
+  const tIdx = dayDiff(start, todayISO());
+
+  const sorted = tasks.slice().sort((a,b) => a.start < b.start ? -1 : a.start > b.start ? 1 : (a.end < b.end ? -1 : 1));
+  const bodyH = $('#ganttBody').clientHeight || 300;
+  const rowH = Math.max(20, Math.min(44, Math.floor(bodyH / Math.max(sorted.length, 1))));
+
+  /* --- 時間軸 --- */
+  let ah = '';
+  const showEachDay = colW >= 17;
+  const weekStep = Math.max(1, Math.ceil(34 / (colW * 7))); // 週ラベルの間引き（重なり防止）
+  let mondayIdx = 0;
+  for (let i = 0; i < days; i++){
+    const d = addDays(fromISO(start), i);
+    const x = i * colW;
+    if (d.getDate() === 1 || i === 0){
+      // 次の月境界までの幅に収める（ラベル同士の重なり防止）
+      let j = i + 1;
+      while (j < days && addDays(fromISO(start), j).getDate() !== 1) j++;
+      const avail = (j - i) * colW - 3;
+      const label = avail >= 74 ? `${d.getFullYear()}年${d.getMonth()+1}月`
+                  : avail >= 24 ? `${d.getMonth()+1}月` : '';
+      if (label) ah += `<div class="ax-month" style="left:${x}px; max-width:${avail}px;">${label}</div>`;
+    }
+    if (showEachDay){
+      const cls = d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '';
+      const tcls = i === tIdx ? ' today' : '';
+      const label = colW >= 30 ? `${d.getDate()}${WKD[d.getDay()]}` : d.getDate();
+      ah += `<div class="ax-day${cls}${tcls}" style="left:${x}px; width:${colW}px;">${label}</div>`;
+    } else if (d.getDay() === 1){ // 月曜だけ（幅が足りなければ間引く）
+      if (mondayIdx % weekStep === 0){
+        ah += `<div class="ax-day" style="left:${x}px; width:${Math.max(colW*7*weekStep-2,30)}px; text-align:left; padding-left:2px;">${d.getMonth()+1}/${d.getDate()}</div>`;
+      }
+      mondayIdx++;
+    }
+  }
+  axis.innerHTML = ah;
+
+  /* --- 背景（週末・今日・グリッド） --- */
+  let ch = '';
+  for (let i = 0; i < days; i++){
+    const d = addDays(fromISO(start), i);
+    const x = i * colW;
+    if (d.getDay() === 0 || d.getDay() === 6) ch += `<div class="bg-weekend" style="left:${x}px; width:${colW}px;"></div>`;
+    if (d.getDate() === 1) ch += `<div class="bg-month" style="left:${x}px;"></div>`;
+    else if (showEachDay || d.getDay() === 1) ch += `<div class="bg-grid" style="left:${x}px;"></div>`;
+  }
+  if (tIdx >= 0 && tIdx < days){
+    ch += `<div class="bg-today" style="left:${tIdx*colW}px; width:${colW}px;"></div>`;
+    ch += `<div class="today-line" style="left:${tIdx*colW}px;"></div>`;
+  }
+  for (let r = 0; r <= sorted.length; r++) ch += `<div class="bg-row" style="top:${r*rowH}px;"></div>`;
+  chart.innerHTML = ch;
+
+  /* --- タスク名列とバー --- */
+  let nh = '';
+  sorted.forEach((t, r) => {
+    nh += `<div class="g-name${t.progress >= 100 ? ' done100' : ''}" style="height:${rowH}px;" data-id="${t.id}">
+             <span style="width:9px;height:9px;border-radius:50%;background:${t.color};flex:none;margin-right:5px;"></span>
+             ${t.src ? `<span class="srcic" title="自動取り込み" style="margin-right:3px;">${srcIcon(t.src)}</span>` : ''}
+             <span style="overflow:hidden;text-overflow:ellipsis;">${esc(t.name)}</span>
+             <span class="pct">${t.progress}%</span>
+           </div>`;
+    const s = dayDiff(start, t.start), e = dayDiff(start, t.end) + 1; // eは排他
+    const si = Math.max(0, s), ei = Math.min(days, e);
+    if (ei <= 0 || si >= days) return; // 画面外
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (s < 0 ? ' clip-l' : '') + (e > days ? ' clip-r' : '');
+    bar.style.cssText = `left:${si*colW}px; width:${Math.max((ei-si)*colW-2, 8)}px; top:${r*rowH+3}px; height:${rowH-6}px; background:${t.color}CC;`;
+    bar.innerHTML = `<div class="fill" style="width:${100-t.progress}%; left:auto; right:0;"></div>
+                     <span class="lbl">${t.progress >= 100 ? '✓ ' : ''}${esc(t.name)}</span>`;
+    attachBarEvents(bar, t, colW);
+    chart.appendChild(bar);
+  });
+  nameCol.innerHTML = nh;
+  nameCol.querySelectorAll('.g-name').forEach(el => {
+    el.onclick = () => { const t = tasks.find(x => x.id === el.dataset.id); if (t) openTaskDlg(t); };
+  });
+
+  if (!sorted.length){
+    chart.insertAdjacentHTML('beforeend',
+      `<div id="ganttEmpty">長期タスクはまだありません。<br>右上の「＋ 長期タスク」から追加してください。</div>`);
+  }
+  $('#taskCount').textContent = sorted.length ? `${sorted.length}件` : '';
+}
+
+/* バーのドラッグ（移動・伸縮）とクリック編集 */
+function attachBarEvents(bar, t, colW){
+  bar.addEventListener('pointermove', e => {
+    if (bar.dataset.drag) return;
+    const r = bar.getBoundingClientRect();
+    bar.style.cursor = (e.clientX - r.left < 8 || r.right - e.clientX < 8) ? 'ew-resize' : 'grab';
+  });
+  bar.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const r = bar.getBoundingClientRect();
+    const edge = (e.clientX - r.left < 8) ? 'l' : (r.right - e.clientX < 8) ? 'r' : 'm';
+    const x0 = e.clientX, s0 = t.start, e0 = t.end;
+    let moved = false;
+    bar.dataset.drag = '1';
+    const mv = ev => {
+      const dd = Math.round((ev.clientX - x0) / colW);
+      const ns = iso(addDays(fromISO(s0), dd)), ne = iso(addDays(fromISO(e0), dd));
+      if (edge === 'm'){ if (t.start !== ns){ moved = true; t.start = ns; t.end = ne; renderGantt(); } }
+      else if (edge === 'l'){ if (dayDiff(ns, t.end) >= 0 && t.start !== ns){ moved = true; t.start = ns; renderGantt(); } }
+      else { if (dayDiff(t.start, ne) >= 0 && t.end !== ne){ moved = true; t.end = ne; renderGantt(); } }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', mv);
+      window.removeEventListener('pointerup', up);
+      if (moved){ saveTasks(); renderAll(); } else openTaskDlg(t);
+    };
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
+  });
+}
+
+/* ========== やること・予定リスト ========== */
+function whenLabel(t){
+  if (!t.date) return t.time || '';
+  const d = fromISO(t.date);
+  const dateStr = `${d.getMonth()+1}/${d.getDate()}(${WKD[d.getDay()]})`;
+  return t.time ? `${dateStr} ${t.time}` : dateStr;
+}
+function renderTodos(){
+  const list = $('#todoList');
+  const today = todayISO();
+  const act = todos.filter(t => !t.done);
+  const byTime = (a,b) => (a.time||'99') < (b.time||'99') ? -1 : 1;
+  const groups = [
+    ['⚠ 期限切れ', act.filter(t => t.date && t.date < today).sort((a,b)=> a.date<b.date?-1:1), 'overdue'],
+    ['📌 今日',    act.filter(t => t.date === today).sort(byTime), ''],
+    ['📝 いつでも（日付なし）', act.filter(t => !t.date), ''],
+    ['📅 今後の予定', act.filter(t => t.date && t.date > today).sort((a,b)=> a.date===b.date ? byTime(a,b) : (a.date<b.date?-1:1)), ''],
+  ];
+  const done = todos.filter(t => t.done);
+  let h = '';
+  groups.forEach(([title, items, cls]) => {
+    if (!items.length) return;
+    h += `<div class="todo-sec ${cls}">${title}<span class="count">${items.length}件</span></div>`;
+    items.forEach(t => { h += todoItemHTML(t, cls); });
+  });
+  if (!act.length && !done.length){
+    h = `<div id="todoEmpty">まだ何もありません。<br>上の入力欄から「やること」や「予定」を追加できます。<br>日付・時刻は空欄でもOKです。</div>`;
+  }
+  if (showDone && done.length){
+    h += `<div class="todo-sec">✔ 完了済み</div>`;
+    done.slice().reverse().forEach(t => { h += todoItemHTML(t, 'done'); });
+  }
+  list.innerHTML = h;
+
+  list.querySelectorAll('.todo-item input[type=checkbox]').forEach(cb => {
+    cb.onchange = () => {
+      const t = todos.find(x => x.id === cb.closest('.todo-item').dataset.id);
+      if (t){ t.done = cb.checked; saveTodos(); renderAll(); }
+    };
+  });
+  list.querySelectorAll('.todo-item .txt').forEach(el => {
+    el.onclick = () => {
+      const t = todos.find(x => x.id === el.closest('.todo-item').dataset.id);
+      if (t) openTodoDlg(t);
+    };
+  });
+
+  $('#toggleDone').textContent = `完了済み ${done.length}件 ${showDone ? '▲隠す' : '▼表示'}`;
+  $('#toggleDone').style.visibility = done.length ? 'visible' : 'hidden';
+  $('#clearDone').style.visibility = done.length ? 'visible' : 'hidden';
+}
+function todoItemHTML(t, cls){
+  const w = whenLabel(t);
+  return `<div class="todo-item ${cls}" data-id="${t.id}">
+    <input type="checkbox" ${t.done ? 'checked' : ''}>
+    ${t.src ? `<span class="srcic" title="自動取り込み">${srcIcon(t.src)}</span>` : ''}
+    <span class="txt" title="クリックで編集">${esc(t.text)}</span>
+    ${w ? `<span class="when">${w}</span>` : ''}
+  </div>`;
+}
+
+/* ========== 統計 ========== */
+function renderStats(){
+  const today = todayISO();
+  const running = tasks.filter(t => t.progress < 100 && t.start <= today && today <= t.end).length;
+  const left = todos.filter(t => !t.done && (!t.date || t.date <= today)).length;
+  let syncInfo = '';
+  const ls = localStorage.getItem('tm_lastSync');
+  if (ls){
+    const d = new Date(ls);
+    if (!isNaN(d)) syncInfo = `<span title="Claudeが集めた予定データの取り込み日時">🔄 ${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())} 取込</span>`;
+  }
+  $('#statsBar').innerHTML =
+    `<span>進行中の長期タスク <b>${running}</b> 件</span>` +
+    `<span>今日やること 残り <b>${left}</b> 件</span>` + syncInfo;
+}
+
+function renderAll(){ renderGantt(); renderTodos(); renderStats(); }
+
+/* ========== 予定データ（task-feed.json）の取り込み ========== */
+const srcIcon = s => s.startsWith('gcal') ? '📅' : s.startsWith('gmail') ? '✉️'
+                 : s.startsWith('drive') ? '📁' : s.startsWith('file') ? '💾' : '🔄';
+
+/* Claudeが集めた予定データを、手入力の項目を壊さずにマージする。
+   - srcId が一致 → 内容を更新（完了済みはそのまま）
+   - フィードに無くなった自動取り込み項目 → 予定が消えたとみなし削除（完了済みは残す）
+   - 手入力（srcなし）には一切触らない */
+function mergeFeed(feed){
+  if (!feed || (!Array.isArray(feed.tasks) && !Array.isArray(feed.todos))) return false;
+  const fT = feed.tasks || [], fD = feed.todos || [];
+  const tIds = new Set(fT.map(x => x.srcId));
+  tasks = tasks.filter(t => !t.src || t.progress >= 100 || tIds.has(t.src));
+  fT.forEach(f => {
+    const t = tasks.find(x => x.src === f.srcId);
+    if (t){ t.name = f.name; t.start = f.start; t.end = f.end; }
+    else tasks.push({id: uid(), src: f.srcId, name: f.name, start: f.start, end: f.end,
+                     color: PALETTE[tasks.length % PALETTE.length], progress: f.progress || 0});
+  });
+  const dIds = new Set(fD.map(x => x.srcId));
+  todos = todos.filter(t => !t.src || t.done || dIds.has(t.src));
+  fD.forEach(f => {
+    const t = todos.find(x => x.src === f.srcId);
+    if (t){ if (!t.done){ t.text = f.text; t.date = f.date || ''; t.time = f.time || ''; } }
+    else todos.push({id: uid(), src: f.srcId, text: f.text, date: f.date || '', time: f.time || '', done: false});
+  });
+  saveTasks(); saveTodos();
+  if (feed.generated) localStorage.setItem('tm_lastSync', feed.generated);
+  renderAll();
+  return true;
+}
+
+async function fetchFeed(manual){
+  try {
+    const r = await fetch('task-feed.json?ts=' + Date.now(), {cache: 'no-store'});
+    if (!r.ok) throw 0;
+    const ok = mergeFeed(await r.json());
+    if (manual) alert(ok ? '予定データを取り込みました' : 'task-feed.json の形式が正しくありません');
+  } catch(_){
+    // file:// で開いている場合など fetch 不可 → ドラッグ&ドロップで取り込み可能
+    if (manual) alert('task-feed.json を読み込めませんでした。\nファイルをこの画面にドラッグしても取り込めます。');
+  }
+}
+
+function handleImported(data){
+  if (data && (data.generated || data.source === 'claude-sync')){
+    alert(mergeFeed(data) ? '予定データを取り込みました' : '形式が正しくありません');
+  } else if (data && Array.isArray(data.tasks) && Array.isArray(data.todos)){
+    if (confirm('現在のデータを、読み込んだバックアップで置き換えます。よろしいですか？')){
+      tasks = data.tasks; todos = data.todos;
+      saveTasks(); saveTodos(); renderAll();
+    }
+  } else alert('対応していないファイルです。バックアップまたは予定データ(.json)を選んでください。');
+}
+
+/* ---- 暗号化された予定データ(feed.enc.json)の取り込み：スマホ・公開ページ用 ---- */
+const b64u = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function decryptFeed(enc, pass){
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:b64u(enc.salt), iterations:150000, hash:'SHA-256'},
+    km, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64u(enc.iv)}, key, b64u(enc.data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+let encFeedCache = null;
+async function tryEncFeed(){
+  if (!window.crypto || !crypto.subtle) return; // file://など非対応環境では何もしない
+  try {
+    const r = await fetch('feed.enc.json?ts=' + Date.now(), {cache:'no-store'});
+    if (!r.ok) return;
+    encFeedCache = await r.json();
+  } catch(_){ return; }
+  const saved = localStorage.getItem('tm_pass');
+  if (saved){
+    try { mergeFeed(await decryptFeed(encFeedCache, saved)); return; }
+    catch(_){ localStorage.removeItem('tm_pass'); } // 合言葉が変わった場合は再入力へ
+  }
+  $('#passDlg').showModal();
+}
+$('#passForm').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const feed = await decryptFeed(encFeedCache, $('#passInput').value);
+    localStorage.setItem('tm_pass', $('#passInput').value);
+    $('#passErr').style.display = 'none';
+    $('#passInput').value = '';
+    $('#passDlg').close();
+    mergeFeed(feed);
+  } catch(_){ $('#passErr').style.display = 'block'; }
+};
+$('#passCancel').onclick = () => $('#passDlg').close();
+
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', async e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  try { handleImported(JSON.parse(await f.text())); }
+  catch(_){ alert('JSONファイルとして読み込めませんでした'); }
+});
+
+/* ========== ダイアログ：長期タスク ========== */
+function buildSwatches(){
+  $('#tColors').innerHTML = PALETTE.map(c =>
+    `<div class="swatch" data-c="${c}" style="background:${c}"></div>`).join('');
+  $('#tColors').querySelectorAll('.swatch').forEach(el => {
+    el.onclick = () => { selColor = el.dataset.c; markSwatch(); };
+  });
+}
+function markSwatch(){
+  $('#tColors').querySelectorAll('.swatch').forEach(el =>
+    el.classList.toggle('on', el.dataset.c === selColor));
+}
+function openTaskDlg(t){
+  editingTask = t || null;
+  $('#taskDlgTitle').textContent = t ? '長期タスクの編集' : '長期タスクを追加';
+  $('#tName').value = t ? t.name : '';
+  $('#tStart').value = t ? t.start : todayISO();
+  $('#tEnd').value = t ? t.end : iso(addDays(new Date(), 13));
+  $('#tProg').value = t ? t.progress : 0;
+  $('#tProgVal').textContent = (t ? t.progress : 0) + '%';
+  selColor = t ? t.color : PALETTE[tasks.length % PALETTE.length];
+  markSwatch();
+  $('#tDelete').style.visibility = t ? 'visible' : 'hidden';
+  $('#taskDlg').showModal();
+}
+$('#taskForm').onsubmit = e => {
+  e.preventDefault();
+  const name = $('#tName').value.trim(), s = $('#tStart').value, en = $('#tEnd').value;
+  if (!name || !s || !en) return;
+  if (en < s){ alert('終了日は開始日より後にしてください'); return; }
+  const prog = Number($('#tProg').value);
+  if (editingTask){ Object.assign(editingTask, {name, start:s, end:en, color:selColor, progress:prog}); }
+  else tasks.push({id:uid(), name, start:s, end:en, color:selColor, progress:prog});
+  saveTasks(); $('#taskDlg').close(); renderAll();
+};
+$('#tProg').oninput = () => $('#tProgVal').textContent = $('#tProg').value + '%';
+$('#tCancel').onclick = () => $('#taskDlg').close();
+$('#tDelete').onclick = () => {
+  if (editingTask && confirm(`「${editingTask.name}」を削除しますか？`)){
+    tasks = tasks.filter(t => t !== editingTask);
+    saveTasks(); $('#taskDlg').close(); renderAll();
+  }
+};
+
+/* ========== ダイアログ：やること・予定 ========== */
+function openTodoDlg(t){
+  editingTodo = t;
+  $('#dText').value = t.text; $('#dDate').value = t.date || ''; $('#dTime').value = t.time || '';
+  $('#todoDlg').showModal();
+}
+$('#todoForm').onsubmit = e => {
+  e.preventDefault();
+  const text = $('#dText').value.trim();
+  if (!text) return;
+  Object.assign(editingTodo, {text, date: $('#dDate').value, time: $('#dTime').value});
+  saveTodos(); $('#todoDlg').close(); renderAll();
+};
+$('#dCancel').onclick = () => $('#todoDlg').close();
+$('#dDelete').onclick = () => {
+  if (editingTodo && confirm(`「${editingTodo.text}」を削除しますか？`)){
+    todos = todos.filter(t => t !== editingTodo);
+    saveTodos(); $('#todoDlg').close(); renderAll();
+  }
+};
+
+/* ========== クイック追加 ========== */
+$('#quickAdd').onsubmit = e => {
+  e.preventDefault();
+  const text = $('#qaText').value.trim();
+  if (!text) return;
+  todos.push({id:uid(), text, date: $('#qaDate').value, time: $('#qaTime').value, done:false});
+  saveTodos();
+  $('#qaText').value = ''; $('#qaDate').value = ''; $('#qaTime').value = '';
+  $('#qaText').focus();
+  renderAll();
+};
+
+/* ========== 表示範囲・ナビ ========== */
+$('#rangeSeg').querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    view.days = Number(b.dataset.days);
+    localStorage.setItem('tm_days', view.days);
+    $('#rangeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    resetViewStart(); renderGantt();
+  };
+});
+$('#navPrev').onclick = () => { view.start = iso(addDays(fromISO(view.start), -Math.round(view.days/2))); renderGantt(); };
+$('#navNext').onclick = () => { view.start = iso(addDays(fromISO(view.start),  Math.round(view.days/2))); renderGantt(); };
+$('#navToday').onclick = () => { resetViewStart(); renderGantt(); };
+
+/* ========== メニュー ========== */
+$('#exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify({tasks, todos}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `タスク管理バックアップ-${todayISO()}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+  $('#gearMenu').open = false;
+};
+$('#importBtn').onclick = () => { $('#importFile').click(); };
+$('#importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { handleImported(JSON.parse(await f.text())); }
+  catch(_){ alert('読み込めませんでした。JSONファイルを選んでください。'); }
+  e.target.value = ''; $('#gearMenu').open = false;
+};
+$('#syncBtn').onclick = () => location.reload(); // 再読み込みで最新のtask-feed.jsを取り込む
+$('#sampleBtn').onclick = () => seedSample(false);
+$('#clearBtn').onclick = () => {
+  if (confirm('長期タスク・やること・予定を すべて消去します。よろしいですか？')){
+    tasks = []; todos = []; saveTasks(); saveTodos(); renderAll();
+  }
+  $('#gearMenu').open = false;
+};
+function seedSample(skipConfirm){
+  if (!skipConfirm && !confirm('サンプルデータを追加します（今あるデータは残ります）。よろしいですか？')) return;
+  const D = n => iso(addDays(new Date(), n));
+  tasks.push(
+    {id:uid(), name:'大会の準備',       start:D(-10), end:D(20), color:PALETTE[0], progress:40},
+    {id:uid(), name:'資料づくり',       start:D(-3),  end:D(10), color:PALETTE[1], progress:20},
+    {id:uid(), name:'部屋の片づけ',     start:D(2),   end:D(16), color:PALETTE[2], progress:0},
+    {id:uid(), name:'報告書の提出',     start:D(-20), end:D(3),  color:PALETTE[3], progress:80},
+  );
+  todos.push(
+    {id:uid(), text:'銀行に行く',        date:D(0),  time:'15:00', done:false},
+    {id:uid(), text:'買い物（牛乳・卵）', date:D(0),  time:'',      done:false},
+    {id:uid(), text:'歯医者の予約',      date:D(1),  time:'10:00', done:false},
+    {id:uid(), text:'図書館に本を返す',  date:D(-2), time:'',      done:false},
+    {id:uid(), text:'写真の整理',        date:'',    time:'',      done:false},
+    {id:uid(), text:'ゴミ出し',          date:D(0),  time:'',      done:true},
+  );
+  saveTasks(); saveTodos(); renderAll();
+  $('#gearMenu').open = false;
+}
+window.__seedSample = seedSample; // 動作確認用
+
+$('#toggleDone').onclick = () => { showDone = !showDone; renderTodos(); };
+$('#clearDone').onclick = () => {
+  const n = todos.filter(t => t.done).length;
+  if (n && confirm(`完了済み ${n}件 を消去しますか？`)){
+    todos = todos.filter(t => !t.done); saveTodos(); renderAll();
+  }
+};
+$('#addTaskBtn').onclick = () => openTaskDlg(null);
+document.addEventListener('click', e => { // メニュー外クリックで閉じる
+  if (!$('#gearMenu').contains(e.target)) $('#gearMenu').open = false;
+});
+
+/* ========== 起動 ========== */
+function renderHeader(){
+  const d = new Date();
+  $('#todayLabel').textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WKD[d.getDay()]}）`;
+}
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderGantt, 120); });
+
+buildSwatches();
+load();
+renderHeader();
+document.querySelectorAll('#rangeSeg button').forEach(b =>
+  b.classList.toggle('on', Number(b.dataset.days) === view.days));
+renderAll();
+// 同じフォルダの task-feed.js（Claudeが自動集約）があれば自動取り込み。
+// file://（ダブルクリック起動）でも <script src> なら読み込める。
+if (window.TASK_FEED) mergeFeed(window.TASK_FEED);
+else tryEncFeed(); // 公開ページ(スマホ)では暗号化データを合言葉で復号して取り込み
+// スマホでのオフライン利用（GitHub Pages上のみ有効）
+if ('serviceWorker' in navigator && location.hostname.endsWith('github.io')){
+  navigator.serviceWorker.register('sw.js');
+}
+/* 日付が変わったら自動で表示を更新（開きっぱなし対策） */
+setInterval(() => {
+  if ($('#todayLabel').textContent.indexOf(`${new Date().getDate()}日`) === -1){
+    renderHeader(); resetViewStart(); renderAll();
+  }
+}, 60000);
+</script>
+</body>
+</html>
